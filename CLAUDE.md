@@ -85,8 +85,27 @@ then register a tool schema + one-line dispatch entry in `app/agents/tools.py`. 
 needed to the orchestrator loop, API routes, or frontend.
 
 **CI/CD reuses the GitHub client's credentials** (`app/integrations/cicd_client.py` hits the
-same repo's GitHub Actions API) rather than being a separate configured source — there's no
+same repo's GitHub Actions data) rather than being a separate configured source — there's no
 separate `CICD_*` env var.
+
+**GitHub and CI/CD data comes from GitHub's remote MCP server, not the REST API directly.**
+`app/integrations/github_mcp.py` opens a fresh MCP `ClientSession` per call over streamable
+HTTP to `https://api.githubcopilot.com/mcp/`, authenticated with `GITHUB_TOKEN` as a bearer
+token and scoped via the `X-MCP-Toolsets: repos,pull_requests,actions` header. `github_client.py`
+calls the atomic `list_commits` / `list_pull_requests` tools (camelCase args: `perPage`).
+`cicd_client.py` calls the consolidated `actions_list` tool with `method: "list_workflow_runs"`
+(snake_case args: `per_page`) — GitHub's Actions toolset exposes one multi-method tool
+(`actions_list`/`actions_get`/`actions_run_trigger`/`get_job_logs`) rather than one tool per
+REST endpoint; there is no standalone `list_workflow_runs` tool, and calling it directly 404s
+with `unknown tool`. Both wrap each `call_tool` in a `try/except` that falls back to an empty
+result, mirroring the old non-200-status handling — an MCP call failing shouldn't crash
+`fetch_summary`, only zero out that source. Because of that fallback, a wrong tool name or
+schema silently degrades to a plausible-looking all-zero result instead of erroring — verify any
+new tool call directly (`session.call_tool(...)`, check `isError`) before trusting it just
+because `fetch_summary` returned cleanly. This requires `mcp` (the Python MCP SDK), which
+pins `starlette==0.38.6` in `requirements.txt`; a bare `pip install mcp` pulls in a newer
+starlette that's incompatible with this project's pinned `fastapi==0.115.0` (`starlette<0.39`)
+— don't drop that pin without also bumping fastapi.
 
 **Chat flow**: `POST /api/chat` (`app/api/routes/chat.py`) loads or creates a `Conversation`,
 converts its `Message` history to OpenAI-style chat message format, calls `run_agent`, then persists

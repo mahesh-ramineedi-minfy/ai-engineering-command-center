@@ -1,8 +1,5 @@
-import httpx
-
 from app.core.config import settings
-
-GITHUB_API = "https://api.github.com"
+from app.integrations.github_mcp import call_tool
 
 
 class GitHubClient:
@@ -18,25 +15,33 @@ class GitHubClient:
         return self._mock(repo)
 
     async def _fetch_live(self, repo: str) -> dict:
-        headers = {"Authorization": f"Bearer {settings.github_token}", "Accept": "application/vnd.github+json"}
-        async with httpx.AsyncClient(base_url=GITHUB_API, headers=headers, timeout=15) as client:
-            commits_resp = await client.get(f"/repos/{repo}/commits", params={"per_page": 20})
-            prs_resp = await client.get(f"/repos/{repo}/pulls", params={"state": "open", "per_page": 50})
+        owner, name = repo.split("/", 1)
 
-            commits = commits_resp.json() if commits_resp.status_code == 200 else []
-            prs = prs_resp.json() if prs_resp.status_code == 200 else []
+        try:
+            commits = await call_tool("list_commits", {"owner": owner, "repo": name, "perPage": 20})
+        except Exception:
+            commits = []
+        try:
+            prs = await call_tool(
+                "list_pull_requests", {"owner": owner, "repo": name, "state": "open", "perPage": 50}
+            )
+        except Exception:
+            prs = []
 
-            stale_prs = [pr for pr in prs if isinstance(pr, dict) and _is_stale(pr.get("updated_at"))]
-            contributors = {c.get("commit", {}).get("author", {}).get("name") for c in commits if isinstance(c, dict)}
+        commits = commits if isinstance(commits, list) else []
+        prs = prs if isinstance(prs, list) else []
 
-            return {
-                "source": "github",
-                "repo": repo,
-                "recent_commit_count": len(commits),
-                "active_contributors": len([c for c in contributors if c]),
-                "open_pull_requests": len(prs),
-                "stale_pull_requests": len(stale_prs),
-            }
+        stale_prs = [pr for pr in prs if isinstance(pr, dict) and _is_stale(pr.get("updated_at"))]
+        contributors = {c.get("commit", {}).get("author", {}).get("name") for c in commits if isinstance(c, dict)}
+
+        return {
+            "source": "github",
+            "repo": repo,
+            "recent_commit_count": len(commits),
+            "active_contributors": len([c for c in contributors if c]),
+            "open_pull_requests": len(prs),
+            "stale_pull_requests": len(stale_prs),
+        }
 
     def _mock(self, repo: str | None) -> dict:
         return {

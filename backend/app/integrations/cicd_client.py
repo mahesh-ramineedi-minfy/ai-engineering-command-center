@@ -1,8 +1,5 @@
-import httpx
-
 from app.core.config import settings
-
-GITHUB_API = "https://api.github.com"
+from app.integrations.github_mcp import call_tool
 
 
 class CicdClient:
@@ -18,24 +15,32 @@ class CicdClient:
         return self._mock(repo)
 
     async def _fetch_live(self, repo: str) -> dict:
-        headers = {"Authorization": f"Bearer {settings.github_token}", "Accept": "application/vnd.github+json"}
-        async with httpx.AsyncClient(base_url=GITHUB_API, headers=headers, timeout=15) as client:
-            resp = await client.get(f"/repos/{repo}/actions/runs", params={"per_page": 20})
-            runs = resp.json().get("workflow_runs", []) if resp.status_code == 200 else []
+        owner, name = repo.split("/", 1)
 
-            total = len(runs)
-            failed = len([r for r in runs if r.get("conclusion") == "failure"])
-            success = len([r for r in runs if r.get("conclusion") == "success"])
+        try:
+            result = await call_tool(
+                "actions_list",
+                {"method": "list_workflow_runs", "owner": owner, "repo": name, "per_page": 20},
+            )
+        except Exception:
+            result = {}
 
-            return {
-                "source": "cicd",
-                "repo": repo,
-                "recent_run_count": total,
-                "successful_runs": success,
-                "failed_runs": failed,
-                "failure_rate_pct": round((failed / total) * 100, 1) if total else 0,
-                "last_run_status": runs[0].get("conclusion") if runs else None,
-            }
+        runs = result.get("workflow_runs", []) if isinstance(result, dict) else result
+        runs = runs if isinstance(runs, list) else []
+
+        total = len(runs)
+        failed = len([r for r in runs if r.get("conclusion") == "failure"])
+        success = len([r for r in runs if r.get("conclusion") == "success"])
+
+        return {
+            "source": "cicd",
+            "repo": repo,
+            "recent_run_count": total,
+            "successful_runs": success,
+            "failed_runs": failed,
+            "failure_rate_pct": round((failed / total) * 100, 1) if total else 0,
+            "last_run_status": runs[0].get("conclusion") if runs else None,
+        }
 
     def _mock(self, repo: str | None) -> dict:
         return {
