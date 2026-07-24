@@ -6,6 +6,9 @@ a single conversational interface. An orchestrator agent investigates questions 
 tools across these sources, correlates the results, and returns executive-ready summaries with
 recommended actions.
 
+See [`docs/architecture.md`](docs/architecture.md) for a component diagram and a traced
+end-to-end request.
+
 ## Stack
 
 - **Backend**: FastAPI, SQLAlchemy (async) + PostgreSQL, NVIDIA NIM (OpenAI-compatible
