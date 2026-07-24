@@ -17,7 +17,7 @@ flowchart TB
         direction TB
         ChatRoute["POST /api/chat<br/>rate_limit_chat + ChatRequest validation"]
         StatusRoute["GET /api/integrations/status"]
-        Orchestrator["run_agent<br/>tool-use loop, max 6 iterations<br/>NVIDIA_MODEL to NVIDIA_FALLBACK_MODEL on failure"]
+        Orchestrator["run_agent<br/>tool-use loop, max 8 iterations, one tool call per turn<br/>NVIDIA_MODEL to NVIDIA_FALLBACK_MODEL on failure"]
         Dispatch["tools.py dispatch table<br/>6 tools"]
 
         subgraph Clients["Integration clients"]

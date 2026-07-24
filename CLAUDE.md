@@ -56,13 +56,28 @@ Both `backend/.env.example` and `frontend/.env.example` list required env vars �
 ## Architecture
 
 **One orchestrator agent, five tools, one loop.** `app/agents/orchestrator.py` runs a single
-OpenAI-compatible tool-use loop against NVIDIA NIM (`run_agent`, max 6 iterations) rather than
+OpenAI-compatible tool-use loop against NVIDIA NIM (`run_agent`, max 8 iterations) rather than
 separate agent processes per domain. The system prompt instructs the model to call multiple
 tools when a question spans systems and explicitly correlate findings (e.g. failed builds +
 open incident + blocked sprint issue = one risk story) but to keep single-system questions to
 one tool call — earlier versions over-called all five tools even for narrow questions until the
 prompt explicitly said not to. Tool schemas and the dispatch table live in
 `app/agents/tools.py` — each tool maps 1:1 to an integration client.
+
+**`NVIDIA_MODEL` (`moonshotai/kimi-k2.6`) rejects more than one `tool_call` per response** — a
+`400 BadRequestError` ("This model only supports single tool-calls at once!") if it ever tries to
+batch multiple tool calls into one turn, which is exactly what the system prompt above invites it
+to do for a broad "release risk"/"delivery health" question needing several signals.
+`run_agent`'s two `chat.completions.create` calls both pass `parallel_tool_calls=False` to force
+one tool call per turn — don't drop it, and don't assume a switch away from `kimi-k2.6` makes it
+safe to drop either without confirming the replacement model actually supports parallel calls.
+This surfaced live while prototyping a (since-reverted) delivery-health digest that needed all 5
+direct tools in one investigation; `chat.py`'s broad `except openai.APIError` had been silently
+converting it to a generic "temporarily unavailable" 502 with no logged traceback, so it read as
+unexplained flakiness until reproduced by calling `run_agent` directly in a script. `MAX_TOOL_ITERATIONS`
+is 8 (not the more obvious 6) specifically because a broad question now costs one iteration per
+signal instead of being able to batch them — 5 tools + 1 synthesis turn is already 6, with no
+margin.
 
 **Tools take zero parameters, by design.** This app monitors one configured repo/project/service
 at a time (env-var driven), not an arbitrary target the model picks per call. An earlier version
