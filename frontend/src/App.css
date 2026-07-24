@@ -184,8 +184,31 @@
 }
 
 .chat-error {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
   color: #e46262;
   font-size: 0.85rem;
+}
+
+.chat-error__retry {
+  padding: 0.25rem 0.7rem;
+  border-radius: 0.4rem;
+  border: 1px solid #e46262;
+  background: transparent;
+  color: #e46262;
+  font-size: 0.8rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.chat-error__retry:hover:not(:disabled) {
+  background: rgba(228, 98, 98, 0.12);
+}
+
+.chat-error__retry:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .chat-input {

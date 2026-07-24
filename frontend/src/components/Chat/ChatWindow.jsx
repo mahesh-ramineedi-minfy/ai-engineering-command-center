@@ -21,19 +21,27 @@ export default function ChatWindow() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
-  async function handleSend(text) {
+  async function performSend(text) {
     setError(null);
-    setMessages((prev) => [...prev, { role: "user", content: text }]);
     setLoading(true);
     try {
       const res = await sendChatMessage(text, conversationId);
       setConversationId(res.conversation_id);
       setMessages((prev) => [...prev, { role: "assistant", content: res.reply, toolCalls: res.tool_calls }]);
     } catch (err) {
-      setError(err.message);
+      setError({ message: err.message, text });
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleSend(text) {
+    setMessages((prev) => [...prev, { role: "user", content: text }]);
+    performSend(text);
+  }
+
+  function handleRetry() {
+    if (error) performSend(error.text);
   }
 
   return (
@@ -55,7 +63,14 @@ export default function ChatWindow() {
           <MessageBubble key={i} role={m.role} content={m.content} toolCalls={m.toolCalls} />
         ))}
         {loading && <ThinkingIndicator />}
-        {error && <div className="chat-error">{error}</div>}
+        {error && (
+          <div className="chat-error">
+            {error.message}
+            <button className="chat-error__retry" onClick={handleRetry} disabled={loading}>
+              Retry
+            </button>
+          </div>
+        )}
       </div>
       <ChatInput onSend={handleSend} disabled={loading} />
     </div>
