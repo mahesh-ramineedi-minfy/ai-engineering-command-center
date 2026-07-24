@@ -1,6 +1,5 @@
-import httpx
-
 from app.core.config import settings
+from app.integrations.jira_mcp import call_tool
 
 
 class JiraClient:
@@ -16,23 +15,27 @@ class JiraClient:
         return self._mock(project_key)
 
     async def _fetch_live(self, project_key: str) -> dict:
-        auth = (settings.jira_email, settings.jira_api_token)
         jql = f'project = "{project_key}" AND sprint in openSprints()'
-        async with httpx.AsyncClient(base_url=settings.jira_url, auth=auth, timeout=15) as client:
-            resp = await client.get("/rest/api/3/search", params={"jql": jql, "maxResults": 100})
-            issues = resp.json().get("issues", []) if resp.status_code == 200 else []
 
-            done = [i for i in issues if i["fields"]["status"]["statusCategory"]["key"] == "done"]
-            blocked = [i for i in issues if "blocked" in i["fields"]["status"]["name"].lower()]
+        try:
+            result = await call_tool("searchJiraIssuesUsingJql", {"jql": jql, "maxResults": 100, "view": "full"})
+        except Exception:
+            result = {}
 
-            return {
-                "source": "jira",
-                "project_key": project_key,
-                "total_issues": len(issues),
-                "completed_issues": len(done),
-                "blocked_issues": len(blocked),
-                "completion_pct": round((len(done) / len(issues)) * 100, 1) if issues else 0,
-            }
+        issues = result.get("data", {}).get("issues", []) if isinstance(result, dict) else []
+        issues = issues if isinstance(issues, list) else []
+
+        done = [i for i in issues if i["fields"]["status"]["statusCategory"]["key"] == "done"]
+        blocked = [i for i in issues if "blocked" in i["fields"]["status"]["name"].lower()]
+
+        return {
+            "source": "jira",
+            "project_key": project_key,
+            "total_issues": len(issues),
+            "completed_issues": len(done),
+            "blocked_issues": len(blocked),
+            "completion_pct": round((len(done) / len(issues)) * 100, 1) if issues else 0,
+        }
 
     def _mock(self, project_key: str | None) -> dict:
         return {
