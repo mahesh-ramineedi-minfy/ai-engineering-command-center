@@ -55,7 +55,16 @@ Answer like a briefing for a busy engineering leader:
 Keep it tight — no filler, no restating the question.
 """
 
-MAX_TOOL_ITERATIONS = 6
+# NVIDIA_MODEL (moonshotai/kimi-k2.6) rejects a response with more than one
+# tool_call ("This model only supports single tool-calls at once!", a 400
+# BadRequestError) — found live while building a delivery-health digest
+# that needed all 5 direct tools in one investigation, since the model
+# tried to batch them. parallel_tool_calls=False below forces one tool
+# call per turn, so a broad question needing N signals (which SYSTEM_PROMPT
+# explicitly tells the model to pursue) now costs N+1 loop iterations, not
+# fewer via batching. 8 gives headroom over the minimum 6 (5 tools + 1
+# synthesis) such a question needs.
+MAX_TOOL_ITERATIONS = 8
 
 _client = AsyncOpenAI(
     api_key=settings.nvidia_api_key,
@@ -83,7 +92,7 @@ async def run_agent(user_message: str, history: list[dict]) -> tuple[str, list[d
     for _ in range(MAX_TOOL_ITERATIONS):
         try:
             response = await _client.chat.completions.create(
-                model=model, max_tokens=1500, tools=TOOLS, messages=messages
+                model=model, max_tokens=1500, tools=TOOLS, messages=messages, parallel_tool_calls=False
             )
         except openai.APIError:
             # NVIDIA NIM model access is per-model and per-account (e.g. moonshotai/kimi-k2.6
@@ -96,7 +105,7 @@ async def run_agent(user_message: str, history: list[dict]) -> tuple[str, list[d
                 raise
             model = settings.nvidia_fallback_model
             response = await _client.chat.completions.create(
-                model=model, max_tokens=1500, tools=TOOLS, messages=messages
+                model=model, max_tokens=1500, tools=TOOLS, messages=messages, parallel_tool_calls=False
             )
         choice = response.choices[0].message
 

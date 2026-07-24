@@ -6,6 +6,10 @@ a single conversational interface. An orchestrator agent investigates questions 
 tools across these sources, correlates the results, and returns executive-ready summaries with
 recommended actions.
 
+See [`docs/architecture.md`](docs/architecture.md) for a component diagram and a traced
+end-to-end request, or the [rendered version](https://claude.ai/code/artifact/e028f6ad-b2e6-4a8b-a457-12a2b19dd28b)
+for the same diagrams as a styled page.
+
 ## Stack
 
 - **Backend**: FastAPI, SQLAlchemy (async) + PostgreSQL, NVIDIA NIM (OpenAI-compatible
