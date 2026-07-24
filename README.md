@@ -9,8 +9,11 @@ recommended actions.
 ## Stack
 
 - **Backend**: FastAPI, SQLAlchemy (async) + PostgreSQL, NVIDIA NIM (OpenAI-compatible
-  tool-use API, default model `meta/llama-3.1-70b-instruct`)
+  tool-use API, default model `moonshotai/kimi-k2.6` with automatic fallback to
+  `meta/llama-3.1-70b-instruct` if the primary model call fails)
 - **Frontend**: React (Vite)
+- **Live data sources**: GitHub and Jira are read through their official remote MCP servers
+  (not direct REST calls) — see `backend/app/integrations/github_mcp.py` and `jira_mcp.py`
 
 ## Prerequisites
 
@@ -71,13 +74,26 @@ App at `http://localhost:5173`.
 Each integration client in `backend/app/integrations/` checks for credentials and falls back
 to mock data if they're missing:
 
-- **GitHub / CI/CD**: set `GITHUB_TOKEN` and `GITHUB_REPO`, then `USE_MOCK_DATA=false`. CI/CD
-  status is read from GitHub Actions workflow runs on the same repo.
+- **GitHub / CI/CD**: set `GITHUB_TOKEN` and `GITHUB_REPO`, then `USE_MOCK_DATA=false`. Both are
+  read through GitHub's remote MCP server (`https://api.githubcopilot.com/mcp/`) — CI/CD status
+  specifically via its consolidated `actions_list` tool, since there's no separate `CICD_*`
+  config; it reuses the GitHub credentials against the same repo's Actions data.
 - **Jira**: set `JIRA_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`, `JIRA_PROJECT_KEY`, then
-  `USE_MOCK_DATA=false`.
+  `USE_MOCK_DATA=false`. Read through Atlassian's remote MCP server. This one needs real
+  one-time setup beyond just an API token — a scoped "Rovo MCP V2" token, an org-admin toggle,
+  and (if you want live-data testing) a project with an active sprint — see
+  **`backend/docs/jira-setup.md`** for the full walkthrough.
 - **Monitoring / Incidents**: no universal vendor API exists, so these always return mock data.
   Wire in a real provider (Datadog, Grafana, PagerDuty, ...) in
   `backend/app/integrations/monitoring_client.py`.
+
+## Chat guardrails
+
+`POST /api/chat` rejects empty/oversized messages (max 4000 chars) with a 422, and rate-limits
+each client IP to `CHAT_RATE_LIMIT_PER_MINUTE` requests/minute (default 20, 0 disables) with a
+429 + `Retry-After`. The orchestrator's system prompt also instructs the model to treat tool
+output as data (never as instructions) and to decline off-topic or instruction-override requests
+— see the "Guardrails on `POST /api/chat`" note in `CLAUDE.md` for details.
 
 ## Extending the agent
 
