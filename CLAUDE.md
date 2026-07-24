@@ -5,11 +5,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project
 
 AI Engineering Command Center — an agentic engineering operations platform. It consolidates sprint
-progress (Jira), code activity (GitHub), build/deploy status (CI/CD), uptime (monitoring), and
-incident history into one conversational interface. A tool-use agent (NVIDIA NIM, default
-model `moonshotai/kimi-k2.6`, falling back to `meta/llama-3.1-70b-instruct` if that call fails)
-investigates questions, correlates signals across systems, and returns executive-ready summaries
-with recommended actions (backlog reprioritization, resourcing, escalation).
+progress (Jira), code activity (GitHub), build/deploy status (CI/CD), uptime (monitoring),
+incident history, and semantic search over CI/CD + application logs into one conversational
+interface. A tool-use agent (NVIDIA NIM, default model `moonshotai/kimi-k2.6`, falling back to
+`meta/llama-3.1-70b-instruct` if that call fails) investigates questions, correlates signals
+across systems, and returns executive-ready summaries with recommended actions (backlog
+reprioritization, resourcing, escalation).
 
 ## Commands
 
@@ -39,11 +40,12 @@ npm run build
 ### Database
 
 ```bash
-docker compose up -d   # Postgres on :5432, Adminer (DB browser) on :8080
+docker compose up -d   # Postgres (pgvector-enabled) on :5432, Adminer (DB browser) on :8080
 ```
 
 Tables are created automatically on backend startup via `SQLAlchemy Base.metadata.create_all`
-(see `app/core/database.py`) — there is no Alembic/migration setup.
+(see `app/core/database.py`), which also runs `CREATE EXTENSION IF NOT EXISTS vector` first —
+there is no Alembic/migration setup.
 
 ### Environment
 
@@ -157,6 +159,34 @@ account — don't "fix" them back to the more obvious-looking alternative:
 `backend/scripts/jira_mcp_list_tools.py` prints a live tool's real `inputSchema` — useful the same
 way discovering `actions_list`'s real schema was on the GitHub side, if Atlassian's tool surface
 shifts again.
+
+**`search_error_logs` is a RAG pipeline over a mock log corpus** (`app/rag/`), the sixth
+orchestrator tool and the only one taking a parameter. `app/rag/mock_logs.py` is a static,
+hand-authored list of 30 CI/CD build logs and CloudWatch-style application logs (`source`:
+`"cicd"`/`"cloudwatch"`) — a few deliberately echo `monitoring_client.py`'s mock incidents
+(INC-142, INC-139, INC-131) so a question about one has a concrete log line to retrieve, not just
+the incident summary. `app/rag/embeddings.py` embeds via NVIDIA NIM's `/v1/embeddings`
+(`nvidia/nv-embedqa-e5-v5`, 1024-dim) — **not** `baai/bge-m3`, which is catalog-listed and passes
+`client.models.list()` but 500s on every embeddings call on this account; same class of gotcha as
+`NVIDIA_MODEL`'s `kimi-k2.6` approval gate, just discovered live instead of assumed. `nv-embedqa`
+is an *asymmetric* model — `embed()` takes a required `input_type: "query" | "passage"`, calling
+it wrong doesn't error, it just quietly returns worse-matched results, so ingestion always passes
+`"passage"` and `search_logs()` always passes `"query"`. `app/rag/ingest.py`'s
+`ensure_logs_indexed()` runs once from `main.py`'s `lifespan` (idempotent — checks `LogChunk` row
+count first) and is skipped entirely without `NVIDIA_API_KEY`, so the app still boots fully
+demoable with zero credentials; `search_error_logs` just returns no results in that case rather
+than crashing startup. Storage is pgvector (`app/models/log_chunk.py`), which is why
+`docker-compose.yml`'s Postgres image is `pgvector/pgvector:pg16` rather than `postgres:16-alpine`
+and `database.py`'s `init_db()` runs `CREATE EXTENSION IF NOT EXISTS vector` before
+`create_all` — swapped in place on the existing data volume with no migration needed, since
+Postgres data files aren't tied to the base image's libc.
+
+Because it's the one parameterized tool, `run_tool()` in `tools.py` calls handlers with
+`**tool_input` instead of no args — the five zero-param handlers take `**_` specifically so a
+model hallucinating a stray argument onto one of *them* doesn't raise, preserving the original
+"tools take zero parameters" guarantee. A `TypeError` from a handler (e.g. `search_error_logs`
+called without its required `query`) is caught in `run_tool()` and returned as an error dict the
+model can react to, rather than propagating up and crashing the chat request.
 
 **Chat flow**: `POST /api/chat` (`app/api/routes/chat.py`) loads or creates a `Conversation`,
 converts its `Message` history to OpenAI-style chat message format, calls `run_agent`, then persists

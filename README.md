@@ -14,6 +14,9 @@ recommended actions.
 - **Frontend**: React (Vite)
 - **Live data sources**: GitHub and Jira are read through their official remote MCP servers
   (not direct REST calls) — see `backend/app/integrations/github_mcp.py` and `jira_mcp.py`
+- **Bug/error search**: a RAG pipeline (`backend/app/rag/`) over a mock corpus of CI/CD build
+  logs and CloudWatch-style application logs, embedded via NVIDIA NIM and searched with
+  pgvector, exposed as the `search_error_logs` agent tool
 
 ## Prerequisites
 
@@ -29,7 +32,8 @@ recommended actions.
 docker compose up -d
 ```
 
-Starts Postgres on `localhost:5432` and Adminer (DB browser UI) on `localhost:8080`.
+Starts Postgres (pgvector-enabled — needed for `search_error_logs`) on `localhost:5432` and
+Adminer (DB browser UI) on `localhost:8080`.
 
 ### 2. Backend
 
@@ -86,6 +90,12 @@ to mock data if they're missing:
 - **Monitoring / Incidents**: no universal vendor API exists, so these always return mock data.
   Wire in a real provider (Datadog, Grafana, PagerDuty, ...) in
   `backend/app/integrations/monitoring_client.py`.
+- **Error/bug log search**: always searches the mock corpus in `backend/app/rag/mock_logs.py` —
+  there's no live/mock toggle for this one, it's mock data by design. It does need a real
+  `NVIDIA_API_KEY` to embed the corpus at startup (`app/rag/ingest.py`, called from `main.py`'s
+  lifespan); without one, `search_error_logs` just returns no results rather than failing the
+  whole app's startup. To point it at real logs, replace `mock_logs.py`'s static list with a
+  fetch from your actual log provider — the embedding/storage/search plumbing doesn't change.
 
 ## Chat guardrails
 
@@ -97,11 +107,12 @@ output as data (never as instructions) and to decline off-topic or instruction-o
 
 ## Extending the agent
 
-The orchestrator (`backend/app/agents/orchestrator.py`) is a single tool-use loop with
-five tools defined in `backend/app/agents/tools.py`, one per signal source. To add a new
-signal:
+The orchestrator (`backend/app/agents/orchestrator.py`) is a single tool-use loop with tools
+defined in `backend/app/agents/tools.py`, one per signal source. To add a new signal:
 
 1. Add a client in `backend/app/integrations/` with an async `fetch_summary()` method.
 2. Register a tool schema + dispatch entry in `backend/app/agents/tools.py`.
 
-No changes to the orchestrator loop or API routes are needed.
+No changes to the orchestrator loop or API routes are needed. Tools take no parameters by
+design (see the docstring at the top of `tools.py`) — `search_error_logs`'s `query` parameter is
+a deliberate, explained exception, not a precedent to casually repeat.

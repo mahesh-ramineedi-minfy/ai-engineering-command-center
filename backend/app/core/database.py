@@ -1,5 +1,6 @@
 from collections.abc import AsyncGenerator
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -15,6 +16,9 @@ class Base(DeclarativeBase):
 
 async def init_db() -> None:
     async with engine.begin() as conn:
+        # Required for LogChunk.embedding (pgvector.sqlalchemy.Vector) — the docker-compose
+        # Postgres image already bundles the extension, this just activates it.
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
 
 

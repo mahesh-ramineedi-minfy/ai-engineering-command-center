@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
     nvidia_model: str = "moonshotai/kimi-k2.6"
     nvidia_fallback_model: str = "meta/llama-3.1-70b-instruct"
+    nvidia_embedding_model: str = "nvidia/nv-embedqa-e5-v5"
 
     database_url: str = "postgresql+asyncpg://delivery_health:delivery_health@localhost:5432/delivery_health"
 
