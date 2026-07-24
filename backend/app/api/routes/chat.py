@@ -6,13 +6,14 @@ from sqlalchemy.orm import selectinload
 
 from app.agents.orchestrator import run_agent
 from app.core.database import get_db
+from app.core.rate_limit import rate_limit_chat
 from app.models.conversation import Conversation, Message
 from app.schemas.chat import ChatRequest, ChatResponse, ConversationOut, ToolCallTrace
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 
-@router.post("", response_model=ChatResponse)
+@router.post("", response_model=ChatResponse, dependencies=[Depends(rate_limit_chat)])
 async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)) -> ChatResponse:
     if request.conversation_id:
         conversation = await db.get(Conversation, request.conversation_id)

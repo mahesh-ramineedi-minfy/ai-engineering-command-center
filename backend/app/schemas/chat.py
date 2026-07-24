@@ -1,11 +1,19 @@
 import uuid
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(min_length=1, max_length=4000)
     conversation_id: uuid.UUID | None = None
+
+    @field_validator("message")
+    @classmethod
+    def message_not_blank(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("message cannot be blank")
+        return v
 
 
 class ToolCallTrace(BaseModel):
