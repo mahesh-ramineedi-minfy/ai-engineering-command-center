@@ -7,7 +7,8 @@ tools across these sources, correlates the results, and returns executive-ready 
 recommended actions.
 
 See [`docs/architecture.md`](docs/architecture.md) for a component diagram and a traced
-end-to-end request.
+end-to-end request, or the [rendered version](https://claude.ai/code/artifact/e028f6ad-b2e6-4a8b-a457-12a2b19dd28b)
+for the same diagrams as a styled page.
 
 ## Stack
 
