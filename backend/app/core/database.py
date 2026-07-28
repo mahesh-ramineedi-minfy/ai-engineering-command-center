@@ -15,6 +15,8 @@ class Base(DeclarativeBase):
 
 
 async def init_db() -> None:
+    import app.models  # noqa: F401  # registers all models on Base.metadata before create_all
+
     async with engine.begin() as conn:
         # Required for LogChunk.embedding (pgvector.sqlalchemy.Vector) — the docker-compose
         # Postgres image already bundles the extension, this just activates it.
