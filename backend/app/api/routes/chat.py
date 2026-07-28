@@ -6,15 +6,21 @@ from sqlalchemy.orm import selectinload
 
 from app.agents.orchestrator import run_agent
 from app.core.database import get_db
+from app.core.deps import get_current_manager
 from app.core.rate_limit import rate_limit_chat
 from app.models.conversation import Conversation, Message
+from app.models.user import User
 from app.schemas.chat import ChatRequest, ChatResponse, ConversationOut, ToolCallTrace
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 
 @router.post("", response_model=ChatResponse, dependencies=[Depends(rate_limit_chat)])
-async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)) -> ChatResponse:
+async def chat(
+    request: ChatRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_manager),
+) -> ChatResponse:
     if request.conversation_id:
         conversation = await db.get(Conversation, request.conversation_id)
         if conversation is None:
@@ -50,7 +56,11 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)) -> Chat
 
 
 @router.get("/{conversation_id}", response_model=ConversationOut)
-async def get_conversation(conversation_id: str, db: AsyncSession = Depends(get_db)) -> Conversation:
+async def get_conversation(
+    conversation_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_manager),
+) -> Conversation:
     result = await db.execute(
         select(Conversation).where(Conversation.id == conversation_id).options(selectinload(Conversation.messages))
     )
@@ -61,7 +71,10 @@ async def get_conversation(conversation_id: str, db: AsyncSession = Depends(get_
 
 
 @router.get("", response_model=list[ConversationOut])
-async def list_conversations(db: AsyncSession = Depends(get_db)) -> list[Conversation]:
+async def list_conversations(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_manager),
+) -> list[Conversation]:
     result = await db.execute(
         select(Conversation)
         .order_by(Conversation.created_at.desc())

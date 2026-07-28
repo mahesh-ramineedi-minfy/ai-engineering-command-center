@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import chat, health, integrations
+from app.api.routes import auth, chat, health, integrations
 from app.core.config import settings
 from app.core.database import init_db
 from app.rag.ingest import ensure_logs_indexed
@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if not settings.jwt_secret_key:
+        raise RuntimeError("JWT_SECRET_KEY must be set — see .env.example")
     await init_db()
     # Embedding the mock log corpus needs a real NVIDIA call — skip without a
     # key so the app still boots fully demoable with zero credentials, same
@@ -46,5 +48,6 @@ app.add_middleware(
 )
 
 app.include_router(health.router)
+app.include_router(auth.router)
 app.include_router(chat.router)
 app.include_router(integrations.router)

@@ -27,6 +27,16 @@ class Settings(BaseSettings):
     # Per-IP requests/minute allowed on POST /api/chat. 0 or negative disables the limit.
     chat_rate_limit_per_minute: int = 20
 
+    # JWT / auth. jwt_secret_key has no safe default — main.py's lifespan refuses to
+    # start if it's empty, rather than silently signing tokens with an empty key.
+    jwt_secret_key: str = ""
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 15
+    refresh_token_expire_days: int = 7
+    # Refresh-token cookie's Secure flag. Must stay False for local http://localhost
+    # dev — browsers silently drop Secure cookies over plain HTTP. Set True behind HTTPS.
+    cookie_secure: bool = False
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
