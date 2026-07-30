@@ -90,3 +90,11 @@ export function sendChatMessage(message, conversationId) {
 export function getIntegrationStatus() {
   return request("/api/integrations/status");
 }
+
+export function listConversations() {
+  return request("/api/chat");
+}
+
+export function getConversation(conversationId) {
+  return request(`/api/chat/${conversationId}`);
+}

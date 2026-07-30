@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import Logo from "../Logo";
 
-export default function LoginPage() {
+export default function LoginPage({ onBack }) {
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,6 +25,11 @@ export default function LoginPage() {
   return (
     <div className="login-page">
       <form className="login-form" onSubmit={handleSubmit}>
+        {onBack && (
+          <button type="button" className="login-form__back" onClick={onBack}>
+            ← Back
+          </button>
+        )}
         <div className="login-form__logo">
           <Logo size={32} />
         </div>

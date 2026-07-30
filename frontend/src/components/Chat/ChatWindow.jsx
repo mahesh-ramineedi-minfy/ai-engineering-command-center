@@ -1,48 +1,16 @@
-import { useRef, useState, useEffect } from "react";
-import { sendChatMessage } from "../../api/client";
+import { useRef, useEffect } from "react";
+import { useChat } from "../../context/ChatContext";
 import MessageBubble from "./MessageBubble";
 import ChatInput from "./ChatInput";
 import ThinkingIndicator from "./ThinkingIndicator";
 
-const SUGGESTIONS = [
-  "What's our biggest release risk this sprint?",
-  "Summarize deployment failures this week",
-  "Are there any signs of technical debt piling up?",
-];
-
 export default function ChatWindow() {
-  const [messages, setMessages] = useState([]);
-  const [conversationId, setConversationId] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const { messages, loading, error, sendMessage, retry } = useChat();
   const scrollRef = useRef(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
-
-  async function performSend(text) {
-    setError(null);
-    setLoading(true);
-    try {
-      const res = await sendChatMessage(text, conversationId);
-      setConversationId(res.conversation_id);
-      setMessages((prev) => [...prev, { role: "assistant", content: res.reply, toolCalls: res.tool_calls }]);
-    } catch (err) {
-      setError({ message: err.message, text });
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function handleSend(text) {
-    setMessages((prev) => [...prev, { role: "user", content: text }]);
-    performSend(text);
-  }
-
-  function handleRetry() {
-    if (error) performSend(error.text);
-  }
 
   return (
     <div className="chat-window">
@@ -50,13 +18,7 @@ export default function ChatWindow() {
         {messages.length === 0 && (
           <div className="chat-empty">
             <p>Ask me anything about delivery health across Jira, GitHub, CI/CD, and incidents.</p>
-            <div className="suggestions">
-              {SUGGESTIONS.map((s) => (
-                <button key={s} onClick={() => handleSend(s)}>
-                  {s}
-                </button>
-              ))}
-            </div>
+            <p className="chat-empty__hint">Pick a prompt from the sidebar to get started.</p>
           </div>
         )}
         {messages.map((m, i) => (
@@ -66,13 +28,13 @@ export default function ChatWindow() {
         {error && (
           <div className="chat-error">
             {error.message}
-            <button className="chat-error__retry" onClick={handleRetry} disabled={loading}>
+            <button className="chat-error__retry" onClick={retry} disabled={loading}>
               Retry
             </button>
           </div>
         )}
       </div>
-      <ChatInput onSend={handleSend} disabled={loading} />
+      <ChatInput onSend={sendMessage} disabled={loading} />
     </div>
   );
 }
