@@ -10,7 +10,7 @@ from app.core.deps import get_current_manager
 from app.core.rate_limit import rate_limit_chat
 from app.models.conversation import Conversation, Message
 from app.models.user import User
-from app.schemas.chat import ChatRequest, ChatResponse, ConversationOut, ToolCallTrace
+from app.schemas.chat import ChatRequest, ChatResponse, ConversationOut, ConversationSummaryOut, ToolCallTrace
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -23,14 +23,14 @@ async def chat(
 ) -> ChatResponse:
     if request.conversation_id:
         conversation = await db.get(Conversation, request.conversation_id)
-        if conversation is None:
+        if conversation is None or conversation.user_id != current_user.id:
             raise HTTPException(status_code=404, detail="Conversation not found")
         history_result = await db.execute(
             select(Message).where(Message.conversation_id == conversation.id).order_by(Message.created_at)
         )
         history = [{"role": m.role, "content": m.content} for m in history_result.scalars().all()]
     else:
-        conversation = Conversation(title=request.message[:60])
+        conversation = Conversation(user_id=current_user.id, title=request.message[:60])
         db.add(conversation)
         await db.flush()
         history = []
@@ -65,20 +65,20 @@ async def get_conversation(
         select(Conversation).where(Conversation.id == conversation_id).options(selectinload(Conversation.messages))
     )
     conversation = result.scalar_one_or_none()
-    if conversation is None:
+    if conversation is None or conversation.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return conversation
 
 
-@router.get("", response_model=list[ConversationOut])
+@router.get("", response_model=list[ConversationSummaryOut])
 async def list_conversations(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_manager),
 ) -> list[Conversation]:
     result = await db.execute(
         select(Conversation)
+        .where(Conversation.user_id == current_user.id)
         .order_by(Conversation.created_at.desc())
         .limit(20)
-        .options(selectinload(Conversation.messages))
     )
     return list(result.scalars().all())

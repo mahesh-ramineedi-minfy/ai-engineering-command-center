@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -40,6 +41,15 @@ class ConversationOut(BaseModel):
     id: uuid.UUID
     title: str
     messages: list[MessageOut]
+
+    class Config:
+        from_attributes = True
+
+
+class ConversationSummaryOut(BaseModel):
+    id: uuid.UUID
+    title: str
+    created_at: datetime
 
     class Config:
         from_attributes = True
