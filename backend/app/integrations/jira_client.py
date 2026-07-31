@@ -19,8 +19,20 @@ class JiraClient:
 
         try:
             result = await call_tool("searchJiraIssuesUsingJql", {"jql": jql, "maxResults": 100, "view": "full"})
-        except Exception:
-            result = {}
+        except Exception as exc:
+            # Don't silently present a fabricated "0 issues" as ground truth — a failed
+            # live fetch (e.g. an Atlassian API token missing required scopes) previously
+            # looked identical to a genuinely empty sprint. Surface it via `note` instead.
+            return {
+                "source": "jira",
+                "project_key": project_key,
+                "total_issues": 0,
+                "completed_issues": 0,
+                "blocked_issues": 0,
+                "completion_pct": 0,
+                "issues": [],
+                "note": f"live Jira fetch failed, showing no data rather than guessing: {exc}",
+            }
 
         issues = result.get("data", {}).get("issues", []) if isinstance(result, dict) else []
         issues = issues if isinstance(issues, list) else []
@@ -35,6 +47,14 @@ class JiraClient:
             "completed_issues": len(done),
             "blocked_issues": len(blocked),
             "completion_pct": round((len(done) / len(issues)) * 100, 1) if issues else 0,
+            "issues": [
+                {
+                    "key": i.get("key"),
+                    "title": i.get("fields", {}).get("summary"),
+                    "status": i.get("fields", {}).get("status", {}).get("name"),
+                }
+                for i in issues
+            ],
         }
 
     def _mock(self, project_key: str | None) -> dict:
@@ -47,7 +67,15 @@ class JiraClient:
             "blocked_issues": 4,
             "completion_pct": 56.3,
             "days_remaining": 3,
-            "note": "mock data — set JIRA_URL, JIRA_EMAIL, JIRA_API_TOKEN and USE_MOCK_DATA=false for live data",
+            "issues": [
+                {"key": "DEL-101", "title": "Add refresh-token rotation to auth middleware", "status": "Done"},
+                {"key": "DEL-104", "title": "Fix pagination bug in commit activity widget", "status": "Done"},
+                {"key": "DEL-110", "title": "Migrate incident feed to websocket push", "status": "In Progress"},
+                {"key": "DEL-112", "title": "Add pgvector index for log search", "status": "In Progress"},
+                {"key": "DEL-115", "title": "Investigate flaky CI job on build runner 3", "status": "Blocked"},
+                {"key": "DEL-118", "title": "Write RAG ingestion smoke test", "status": "To Do"},
+            ],
+            "note": "mock data (showing 6 of 32 issues) — set JIRA_URL, JIRA_EMAIL, JIRA_API_TOKEN and USE_MOCK_DATA=false for live data",
         }
 
 
