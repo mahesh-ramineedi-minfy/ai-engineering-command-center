@@ -40,7 +40,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "get_code_activity",
-            "description": "Get recent code activity from GitHub: commit volume, active contributors, open and stale pull requests.",
+            "description": "Get recent code activity from GitHub: commit volume, active contributors, and open/closed/stale pull requests, including titles and numbers for the most recent open and closed PRs.",
             "parameters": {"type": "object", "properties": {}},
         },
     },
